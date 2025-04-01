@@ -6,7 +6,7 @@ import os
 import json
 
 # Configuración
-API_KEY = "AIzaSyABZxZqL0bL0Ic9EUfiM60fDZC9hEdxbXo"  # Reemplázala con tu API Key
+API_KEY = ""  # Reemplázala con tu API Key
 INPUT_CSV = "delitos csv/2020.csv"
 OUTPUT_CSV = "2020_coordenadas.csv"
 CACHE_FILE = "cache_coordenadas.json"  # Archivo para guardar direcciones procesadas
