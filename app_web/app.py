@@ -13,57 +13,6 @@ db = client.caminaseguro
 def home():
     return render_template('index.html')
 
-
-@app.route('/crear-ejemplo', methods=['GET'])
-def crear_ejemplo():
-    datos_ejemplo = [
-        {
-            "municipio": "CELAYA",
-            "colonia": "Centro",
-            "ubicacion": {
-                "type": "Point",
-                "coordinates": [-100.814, 20.524]
-            },
-            "delito": "Robo"
-        },
-        {
-            "municipio": "Celaya",
-            "colonia": "San Juanico",
-            "ubicacion": {
-                "type": "Point",
-                "coordinates": [-100.815, 20.525]
-            },
-            "delito": "Vandalismo"
-        }
-    ]
-
-    try:
-        # Eliminar documentos existentes primero (opcional)
-        db.delitos.delete_many({})
-
-        # Insertar nuevos documentos
-        result = db.delitos.insert_many(datos_ejemplo)
-
-        # Convertir ObjectIds a strings para la respuesta JSON
-        inserted_ids = [str(id) for id in result.inserted_ids]
-
-        # Obtener los documentos insertados para mostrarlos
-        docs_insertados = list(db.delitos.find({"_id": {"$in": result.inserted_ids}}))
-
-        # Función para limpiar el documento antes de serializar
-        def limpiar_doc(doc):
-            doc['_id'] = str(doc['_id'])
-            return doc
-
-        return jsonify({
-            "message": f"{len(inserted_ids)} documentos insertados",
-            "inserted_ids": inserted_ids,
-            "documentos": [limpiar_doc(doc) for doc in docs_insertados]
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route('/diagnostico-filtros', methods=['GET'])
 def diagnostico_filtros():
     stats = {
@@ -86,8 +35,8 @@ def diagnostico_filtros():
 
     return jsonify(stats)
 
-@app.route('/api/zonas', methods=['GET'])
-def get_zonas():
+@app.route('/api/colonias', methods=['GET'])
+def get_colonias():
     try:
         pipeline = [
             {
@@ -152,6 +101,65 @@ def get_zonas():
             "details": str(e)
         }), 500
 
+
+@app.route('/api/calles', methods=['GET'])
+def get_calles():
+    try:
+        # Pipeline base
+        match_stage = {
+            "municipio": {"$regex": "^CELAYA$", "$options": "i"},
+            "calle": {"$exists": True, "$ne": None, "$ne": "", "$ne": "NO CATALOGADO"}
+        }
+
+        pipeline = [
+            {"$match": match_stage},
+            {
+                "$group": {
+                    "_id": {
+                        "calle": "$calle",
+                        "colonia": "$colonia"
+                    },
+                    "total": {"$sum": 1},
+                    "coordenadas": {"$first": "$ubicacion"},
+                    "tipos_delitos": {"$push": "$delito"}
+                }
+            },
+            {
+                "$project": {
+                    "calle": "$_id.calle",
+                    "colonia": "$_id.colonia",
+                    "total": 1,
+                    "coordenadas": 1,
+                    "variedad_delitos": {"$size": "$tipos_delitos"},
+                    "nivel_peligro": {
+                        "$switch": {
+                            "branches": [
+                                {"case": {"$gte": ["$total", 10]}, "then": "Alto"},
+                                {"case": {"$gte": ["$total", 5]}, "then": "Medio"},
+                                {"case": {"$lt": ["$total", 5]}, "then": "Bajo"}
+                            ]
+                        }
+                    }
+                }
+            },
+            {"$sort": {"total": -1}}
+        ]
+
+
+        resultados = list(db.delitos.aggregate(pipeline))
+
+        return jsonify({
+            "status": "success",
+            "count": len(resultados),
+            "data": resultados
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error en /api/calles: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": "Error al procesar la solicitud"
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
