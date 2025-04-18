@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Mapa de Peligrosidad - Celaya</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+      #map {
+        height: 80vh;
+      }
+      .leyenda {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="text-center">Zonas Peligrosas en Celaya</h1>
+    <div id="map"></div>
+    <div class="leyenda">
+      <strong>Leyenda:</strong>
+      <div><span style="color: red">■</span> Alta peligrosidad</div>
+      <div><span style="color: orange">■</span> Peligrosidad media</div>
+      <div><span style="color: green">■</span> Baja peligrosidad</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const map = L.map("map").setView([20.523, -100.814], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap",
+      }).addTo(map);
+
+      fetch("/api/zonas")
+        .then((res) => res.json())
+        .then((data) => {
+          data.forEach((zona) => {
+            if (zona.coords) {
+              const color =
+                zona.nivel === "rojo"
+                  ? "#ff0000"
+                  : zona.nivel === "amarillo"
+                  ? "#ffff00"
+                  : "#00ff00";
+
+              L.circleMarker(
+                [zona.coords.coordinates[1], zona.coords.coordinates[0]],
+                {
+                  radius: 8,
+                  fillColor: color,
+                  color: "#333",
+                  weight: 1,
+                  fillOpacity: 0.8,
+                }
+              )
+                .bindPopup(
+                  `
+                            <b>${zona.colonia}</b><br>
+                            Nivel: ${zona.nivel.toUpperCase()}
+                        `
+                )
+                .addTo(map);
+            }
+          });
+        });
+    </script>
+  </body>
+</html>
