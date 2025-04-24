@@ -1,56 +1,79 @@
-// Inicializar mapa centrado en Celaya
+// Configuración del mapa
 const map = L.map("map").setView([20.523, -100.814], 13);
-
-// Añadir capa base (OpenStreetMap)
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  attribution: "&copy; OpenStreetMap",
 }).addTo(map);
 
-// Colores según nivel de peligro
+// Paleta de colores mejorada
 const colores = {
-  rojo: "#ff0000",
-  amarillo: "#ffff00",
-  verde: "#00ff00",
+  rojo: "#e74c3c", // Rojo más intenso
+  amarillo: "#f39c12", // Amarillo oscuro
+  verde: "#2ecc71", // Verde brillante
+  default: "#95a5a6", // Gris para datos faltantes
 };
 
-// Obtener datos de la API
-fetch("/api/zonas")
-  .then((response) => response.json())
+// Fetch y visualización de datos
+fetch("/api/colonias")
+  .then((response) => {
+    if (!response.ok) throw new Error("Error en la API");
+    return response.json();
+  })
   .then((data) => {
-    console.log("Datos recibidos:", data); // Verifica en consola
+    if (!data || data.length === 0) {
+      console.warn("La API no devolvió datos");
+      return;
+    }
+
+    // Capa para agrupar círculos (mejor control)
+    const markersLayer = L.layerGroup().addTo(map);
 
     data.forEach((zona) => {
-      if (!zona.coords?.coordinates) {
-        console.warn("Zona sin coordenadas válidas:", zona);
+      if (!zona.coordenadas?.coordinates) {
+        console.warn("Zona sin coordenadas:", zona.colonia);
         return;
       }
 
-      const color =
-        {
-          rojo: "#ff0000",
-          amarillo: "#ffcc00",
-          verde: "#00aa00",
-        }[zona.nivel] || "#999";
+      // Radio dinámico basado en total de incidentes
+      const radio = Math.min(15, 5 + Math.sqrt(zona.total));
 
+      // Crea el círculo con estilo mejorado
       L.circleMarker(
-        [zona.coords.coordinates[1], zona.coords.coordinates[0]], // [lat, lon]
+        [zona.coordenadas.coordinates[1], zona.coordenadas.coordinates[0]], // [lat, lon]
         {
-          radius: 8 + zona.total * 0.5, // Radio proporcional a incidentes
-          fillColor: color,
-          color: "#333",
-          weight: 1,
+          radius: radio,
+          fillColor: colores[zona.nivel_peligro] || colores.default,
+          color: "#34495e",
+          weight: 1.5,
           fillOpacity: 0.8,
+          className: `peligro-${zona.nivel_peligro}`, // Para estilos CSS personalizados
         }
       )
         .bindPopup(
           `
-                <b>${zona.colonia}</b><br>
-                Total incidentes: ${zona.total}<br>
-                Nivel: ${zona.nivel.toUpperCase()}
+                <div class="popup-peligro">
+                    <h4>${zona.colonia}</h4>
+                    <p><strong>Nivel:</strong> <span class="nivel-${
+                      zona.nivel_peligro
+                    }">${zona.nivel_peligro.toUpperCase()}</span></p>
+                    <p><strong>Incidentes:</strong> ${zona.total}</p>
+                </div>
             `
         )
-        .addTo(map);
+        .addTo(markersLayer);
     });
+
+    // Ajusta el zoom para mostrar todos los círculos
+    if (data.length > 0) {
+      const coords = data
+        .filter((d) => d.coordenadas)
+        .map((d) => [
+          d.coordenadas.coordinates[1],
+          d.coordenadas.coordinates[0],
+        ]);
+      map.fitBounds(coords, { padding: [50, 50] });
+    }
   })
-  .catch((error) => console.error("Error:", error));
+  .catch((error) => {
+    console.error("Error al cargar datos:", error);
+    L.marker([20.523, -100.814]).bindPopup("Error al cargar datos").addTo(map);
+  });

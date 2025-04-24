@@ -35,6 +35,47 @@ def diagnostico_filtros():
 
     return jsonify(stats)
 
+@app.route('/diagnostico/percentiles')
+def diagnostico_percentiles():
+    try:
+        pipeline = [
+            {"$match": {
+                "municipio": {"$regex": "^CELAYA$", "$options": "i"},
+                "colonia": {"$exists": True, "$ne": None, "$ne": ""}
+            }},
+            {"$group": {
+                "_id": "$colonia",
+                "total": {"$sum": 1}
+            }},
+            {"$sort": {"total": 1}}
+        ]
+        datos = list(db.delitos.aggregate(pipeline))
+
+        # Extraemos solo los valores totales
+        totales = [d["total"] for d in datos]
+
+        if not totales:
+            return jsonify({"error": "No se encontraron datos"}), 404
+
+        # Cálculo de percentiles
+        import numpy as np
+        p25 = int(np.percentile(totales, 25))
+        p50 = int(np.percentile(totales, 50))
+        p75 = int(np.percentile(totales, 75))
+
+        return jsonify({
+            "total_colonias": len(totales),
+            "percentil_25": p25,
+            "percentil_50": p50,
+            "percentil_75": p75,
+            "maximo": max(totales),
+            "minimo": min(totales)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/colonias', methods=['GET'])
 def get_colonias():
     try:
@@ -73,9 +114,9 @@ def get_colonias():
                     "nivel_peligro": {
                         "$switch": {
                             "branches": [
-                                {"case": {"$gte": ["$total", 15]}, "then": "Alto"},
-                                {"case": {"$gte": ["$total", 8]}, "then": "Medio"},
-                                {"case": {"$lt": ["$total", 8]}, "then": "Bajo"}
+                                {"case": {"$gte": ["$total", 100]}, "then": "Alto"},
+                                {"case": {"$gte": ["$total", 50]}, "then": "Medio"},
+                                {"case": {"$lt": ["$total", 49]}, "then": "Bajo"}
                             ]
                         }
                     }
@@ -94,7 +135,7 @@ def get_colonias():
         })
 
     except Exception as e:
-        app.logger.error(f"Error en /api/zonas: {str(e)}")
+        app.logger.error(f"Error en /api/colonias: {str(e)}")
         return jsonify({
             "status": "error",
             "message": "Error al procesar la solicitud",

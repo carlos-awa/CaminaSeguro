@@ -33,42 +33,89 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+      // Configuración del mapa
       const map = L.map("map").setView([20.523, -100.814], 13);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap",
+        attribution: "&copy; OpenStreetMap contributors",
       }).addTo(map);
 
-      fetch("/api/zonas")
-        .then((res) => res.json())
-        .then((data) => {
-          data.forEach((zona) => {
-            if (zona.coords) {
-              const color =
-                zona.nivel === "rojo"
-                  ? "#ff0000"
-                  : zona.nivel === "amarillo"
-                  ? "#ffff00"
-                  : "#00ff00";
+      const colores = {
+        Alto: "#e74c3c", // rojo intenso
+        Medio: "#f39c12", // naranja oscuro
+        Bajo: "#2ecc71", // verde
+        default: "#95a5a6", // gris
+      };
 
-              L.circleMarker(
-                [zona.coords.coordinates[1], zona.coords.coordinates[0]],
-                {
-                  radius: 8,
-                  fillColor: color,
-                  color: "#333",
-                  weight: 1,
-                  fillOpacity: 0.8,
-                }
-              )
-                .bindPopup(
-                  `
-                            <b>${zona.colonia}</b><br>
-                            Nivel: ${zona.nivel.toUpperCase()}
-                        `
-                )
-                .addTo(map);
+      fetch("/api/colonias")
+        .then((res) => res.json())
+        .then((res) => {
+          const datos = res.data;
+          if (!Array.isArray(datos) || datos.length === 0) {
+            console.warn("La API no devolvió datos");
+            return;
+          }
+
+          const markersLayer = L.layerGroup().addTo(map);
+
+          datos.forEach((zona) => {
+            if (
+              !zona.coordenadas ||
+              !Array.isArray(zona.coordenadas.coordinates) ||
+              zona.coordenadas.coordinates.length !== 2
+            ) {
+              console.warn("Zona sin coordenadas válidas:", zona.colonia);
+              return;
             }
+
+            const radio = Math.min(15, 5 + Math.sqrt(zona.total));
+
+            L.circleMarker(
+              [
+                zona.coordenadas.coordinates[1],
+                zona.coordenadas.coordinates[0],
+              ],
+              {
+                radius: radio,
+                fillColor: colores[zona.nivel_peligro] || colores.default,
+                color: "#34495e",
+                weight: 1.5,
+                fillOpacity: 0.8,
+                className: `peligro-${zona.nivel_peligro}`,
+              }
+            )
+              .bindPopup(
+                `
+                <div class="popup-peligro">
+                    <h4>${zona.colonia}</h4>
+                    <p><strong>Nivel:</strong> <span class="nivel-${
+                      zona.nivel_peligro
+                    }">${zona.nivel_peligro.toUpperCase()}</span></p>
+                    <p><strong>Incidentes:</strong> ${zona.total}</p>
+                </div>
+              `
+              )
+              .addTo(markersLayer);
           });
+
+          // Ajustar vista
+          const coords = datos
+            .filter((d) => d.coordenadas?.coordinates?.length === 2)
+            .map((d) => [
+              d.coordenadas.coordinates[1],
+              d.coordenadas.coordinates[0],
+            ]);
+
+          if (coords.length > 1) {
+            map.fitBounds(coords, { padding: [50, 50] });
+          } else if (coords.length === 1) {
+            map.setView(coords[0], 15);
+          }
+        })
+        .catch((error) => {
+          console.error("Error al cargar datos:", error);
+          L.marker([20.523, -100.814])
+            .bindPopup("Error al cargar datos")
+            .addTo(map);
         });
     </script>
   </body>
