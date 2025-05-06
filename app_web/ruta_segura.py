@@ -52,17 +52,27 @@ def calcular_ruta(G, origen_lat, origen_lon, destino_lat, destino_lon, modo):
     ruta = nx.shortest_path(G, nodo_origen, nodo_destino, weight='weight')
 
     coordenadas = []
+    distancia_total = 0
+
     for i in range(len(ruta) - 1):
         u, v = ruta[i], ruta[i + 1]
         edge_data = G.get_edge_data(u, v) or G.get_edge_data(v, u)
         if not edge_data:
             continue
         edge = list(edge_data.values())[0]
+        distancia = edge.get('length', 0)
+        distancia_total += distancia
+
         if 'geometry' in edge:
             coords = list(edge['geometry'].coords)
         else:
             coords = [(G.nodes[u]['x'], G.nodes[u]['y']), (G.nodes[v]['x'], G.nodes[v]['y'])]
         coordenadas.extend(coords)
+
+    # Velocidades promedio por modo (m/s)
+    velocidades = {"peatonal": 1.4, "bicicleta": 4.5, "vehículo": 13.8}
+    velocidad = velocidades.get(modo, 1.4)
+    tiempo_estimado = distancia_total / velocidad  # en segundos
 
     return {
         "type": "Feature",
@@ -71,7 +81,9 @@ def calcular_ruta(G, origen_lat, origen_lon, destino_lat, destino_lon, modo):
             "coordinates": coordenadas
         },
         "properties": {
-            "descripcion": f"Ruta más segura ({modo})"
+            "descripcion": f"Ruta más segura ({modo})",
+            "distancia_m": distancia_total,
+            "tiempo_s": tiempo_estimado
         }
     }
 

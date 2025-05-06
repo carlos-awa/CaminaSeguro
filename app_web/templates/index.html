@@ -44,7 +44,13 @@
             placeholder="Origen"
             class="w-full mt-1 p-2 border rounded"
             autocomplete="off"
-          />
+          /><button
+            onclick="usarUbicacionActual()"
+            class="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
+          >
+            Usar mi ubicación actual
+          </button>
+
           <ul
             id="suggestions-origen"
             class="absolute z-50 w-full bg-white border rounded shadow max-h-40 overflow-y-auto hidden"
@@ -95,8 +101,13 @@
           </button>
         </div>
 
+        <div
+          id="info-ruta"
+          class="mt-4 text-center font-medium text-gray-800"
+        ></div>
+
         <div class="mt-6">
-          <h2 class="text-lg font-semibold mb-2">Leyenda</h2>
+          <h2 class="text-lg font-semibold mb-2">Código de Colores</h2>
           <ul class="space-y-1 text-sm">
             <li>
               <span
@@ -334,7 +345,9 @@
       }
 
       /* dibujar ruta */
-      let rutaLayer;
+      let rutaLayer = null;
+      let marcadorOrigen = null;
+      let marcadorDestino = null;
 
       function dibujarRuta(geometry) {
         if (rutaLayer) map.removeLayer(rutaLayer);
@@ -351,7 +364,7 @@
       }
 
       // Función para trazar la ruta segura
-      async function trazarRuta(tipo) {
+      async function trazarRuta(modo) {
         const origenInput = document.getElementById("origen");
         const destinoInput = document.getElementById("destino");
 
@@ -366,8 +379,18 @@
         }
 
         try {
+          // Eliminar ruta anterior del mapa
+          if (rutaLayer) {
+            map.removeLayer(rutaLayer);
+          }
+
+          // Eliminar marcadores anteriores
+          if (marcadorOrigen) map.removeLayer(marcadorOrigen);
+          if (marcadorDestino) map.removeLayer(marcadorDestino);
+
+          // Obtener la ruta desde la API
           const response = await fetch(
-            `http://localhost:5050/ruta_segura_${tipo}?origen_lat=${lat1}&origen_lon=${lon1}&destino_lat=${lat2}&destino_lon=${lon2}`
+            `http://localhost:5050/ruta_segura_${modo}?origen_lat=${lat1}&origen_lon=${lon1}&destino_lat=${lat2}&destino_lon=${lon2}`
           );
           const data = await response.json();
 
@@ -376,22 +399,73 @@
             return;
           }
 
-          // Elimina rutas anteriores si las hay
-          if (window.rutaActual) {
-            map.removeLayer(window.rutaActual);
+          // Dibujar la nueva ruta
+          rutaLayer = L.geoJSON(data);
+          rutaLayer.addTo(map);
+
+          // Hacer zoom a la ruta completa
+          map.fitBounds(rutaLayer.getBounds());
+
+          // Agregar marcadores
+          marcadorOrigen = L.marker([lat1, lon1])
+            .addTo(map)
+            .bindPopup("Origen")
+            .openPopup();
+          marcadorDestino = L.marker([lat2, lon2])
+            .addTo(map)
+            .bindPopup("Destino");
+
+          // Calcular distancia
+          const coords = data.geometry.coordinates;
+          let distancia = 0;
+          for (let i = 0; i < coords.length - 1; i++) {
+            const [lon1, lat1] = coords[i];
+            const [lon2, lat2] = coords[i + 1];
+            distancia += map.distance([lat1, lon1], [lat2, lon2]);
           }
 
-          // Dibujar nueva ruta y guardarla en variable global
-          window.rutaActual = L.geoJSON(data, {
-            style: {
-              color:
-                tipo === "walk" ? "green" : tipo === "bike" ? "blue" : "red",
-              weight: 5,
-            },
-          }).addTo(map);
+          const km = (distancia / 1000).toFixed(1);
+          let velocidadKmH = { walk: 5, bike: 15, drive: 40 }[modo];
+          const tiempoMin = ((distancia / (velocidadKmH * 1000)) * 60).toFixed(
+            0
+          );
+
+          document.getElementById(
+            "info-ruta"
+          ).innerText = `Distancia: ${km} km\nTiempo estimado: ${tiempoMin} min`;
         } catch (err) {
           alert("Error al trazar la ruta: " + err.message);
         }
+      }
+
+      function usarUbicacionActual() {
+        if (!navigator.geolocation) {
+          alert("La geolocalización no está disponible en este navegador.");
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+
+            const origenInput = document.getElementById("origen");
+            origenInput.value = "Ubicación actual";
+            origenInput.dataset.lat = lat;
+            origenInput.dataset.lon = lon;
+
+            // Agrega un pin al mapa si lo deseas
+            if (typeof origenMarker !== "undefined") {
+              map.removeLayer(origenMarker);
+            }
+            origenMarker = L.marker([lat, lon], {
+              title: "Origen (Tu ubicación)",
+            }).addTo(map);
+          },
+          (error) => {
+            alert("No se pudo obtener la ubicación: " + error.message);
+          }
+        );
       }
     </script>
   </body>
