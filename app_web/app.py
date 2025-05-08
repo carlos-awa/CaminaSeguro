@@ -13,69 +13,6 @@ db = client.caminaseguro
 def home():
     return render_template('index.html')
 
-@app.route('/diagnostico-filtros', methods=['GET'])
-def diagnostico_filtros():
-    stats = {
-        "total_documentos": db.delitos.count_documents({}),
-        "con_municipio_celaya": db.delitos.count_documents({
-            "municipio": {"$regex": "^CELAYA$", "$options": "i"}
-        }),
-        "con_colonia_valida": db.delitos.count_documents({
-            "colonia": {"$exists": True, "$ne": None, "$ne": ""}
-        }),
-        "con_coordenadas": db.delitos.count_documents({
-            "ubicacion.coordinates": {"$exists": True}
-        }),
-        "cumplen_todos_filtros": db.delitos.count_documents({
-            "municipio": {"$regex": "^CELAYA$", "$options": "i"},
-            "colonia": {"$exists": True, "$ne": None, "$ne": ""},
-            "ubicacion.coordinates": {"$exists": True}
-        })
-    }
-
-    return jsonify(stats)
-
-@app.route('/diagnostico/percentiles')
-def diagnostico_percentiles():
-    try:
-        pipeline = [
-            {"$match": {
-                "municipio": {"$regex": "^CELAYA$", "$options": "i"},
-                "colonia": {"$exists": True, "$ne": None, "$ne": ""}
-            }},
-            {"$group": {
-                "_id": "$colonia",
-                "total": {"$sum": 1}
-            }},
-            {"$sort": {"total": 1}}
-        ]
-        datos = list(db.delitos.aggregate(pipeline))
-
-        # Extraemos solo los valores totales
-        totales = [d["total"] for d in datos]
-
-        if not totales:
-            return jsonify({"error": "No se encontraron datos"}), 404
-
-        # Cálculo de percentiles
-        import numpy as np
-        p25 = int(np.percentile(totales, 25))
-        p50 = int(np.percentile(totales, 50))
-        p75 = int(np.percentile(totales, 75))
-
-        return jsonify({
-            "total_colonias": len(totales),
-            "percentil_25": p25,
-            "percentil_50": p50,
-            "percentil_75": p75,
-            "maximo": max(totales),
-            "minimo": min(totales)
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route('/api/colonias', methods=['GET'])
 def get_colonias():
     try:
@@ -126,7 +63,7 @@ def get_colonias():
             {"$match": {"total": {"$gt": 0}}}
         ]
 
-        resultados = list(db.delitos.aggregate(pipeline))
+        resultados = list(db.delitos_prueba.aggregate(pipeline))
 
         return jsonify({
             "status": "success",
@@ -175,9 +112,9 @@ def get_calles():
                     "nivel_peligro": {
                         "$switch": {
                             "branches": [
-                                {"case": {"$gte": ["$total", 10]}, "then": "Alto"},
-                                {"case": {"$gte": ["$total", 5]}, "then": "Medio"},
-                                {"case": {"$lt": ["$total", 5]}, "then": "Bajo"}
+                                {"case": {"$gte": ["$total", 100]}, "then": "Alto"},
+                                {"case": {"$gte": ["$total", 50]}, "then": "Medio"},
+                                {"case": {"$lt": ["$total", 50]}, "then": "Bajo"}
                             ]
                         }
                     }
@@ -187,7 +124,7 @@ def get_calles():
         ]
 
 
-        resultados = list(db.delitos.aggregate(pipeline))
+        resultados = list(db.delitos_prueba.aggregate(pipeline))
 
         return jsonify({
             "status": "success",

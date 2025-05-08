@@ -2,7 +2,7 @@ import json
 import numpy as np
 
 # 1. Leer el archivo JSON original
-with open('incidentes_unificados.json', 'r', encoding='utf-8') as f:
+with open('delitos json/delitos_corregidos.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 
 # 2. Función para limpiar NaN recursivamente
@@ -18,7 +18,7 @@ def clean_nan(obj):
 cleaned_data = clean_nan(data)
 
 # 4. Guardar el nuevo archivo JSON limpio
-with open('incidentes_limpios.json', 'w', encoding='utf-8') as f:
+with open('delitos json/delitos_corregidos_nan.json', 'w', encoding='utf-8') as f:
     json.dump(cleaned_data, f, indent=2, ensure_ascii=False)
 
 print("✅ JSON limpiado guardado como 'incidentes_limpios.json'")

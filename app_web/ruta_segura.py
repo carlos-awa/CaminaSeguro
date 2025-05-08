@@ -122,6 +122,7 @@ def ruta_bike():
         lat_o = float(request.args.get('origen_lat'))
         lon_o = float(request.args.get('origen_lon'))
         lat_d = float(request.args.get('destino_lat'))
+        lat_d = float(request.args.get('destino_lat'))
         lon_d = float(request.args.get('destino_lon'))
 
         geojson = calcular_ruta(G_bike, lat_o, lon_o, lat_d, lon_d, "bicicleta")
